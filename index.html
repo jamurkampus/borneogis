@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="GeoPDF Viewer untuk survei lapangan. Alternatif gratis Avenza Maps. Tanpa login, offline, PWA.">
+  <meta name="theme-color" content="#1565C0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="BorneoGIS">
+
+  <title>BorneoGIS GeoPDF Explorer</title>
+
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- =================== LOADING =================== -->
+<div id="loading-overlay">
+  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="4" width="40" height="40" rx="10" fill="#1565C0"/>
+    <path d="M14 34L24 14L34 34" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M17 28h14" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  </svg>
+  <div class="spinner"></div>
+  <p>Memuat BorneoGIS…</p>
+</div>
+
+<!-- =================== UPDATE BANNER =================== -->
+<div id="update-banner">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.12-2.45"/></svg>
+  <span>Versi baru tersedia.</span>
+  <button class="btn btn-sm" id="btn-update-now" style="background:rgba(255,255,255,.25);color:#fff;">Update Sekarang</button>
+  <button class="btn btn-sm btn-ghost" id="btn-update-later" style="color:rgba(255,255,255,.8);">Nanti</button>
+</div>
+
+<!-- =================== TOPBAR =================== -->
+<div id="topbar">
+  <button id="btn-sidebar-toggle" title="Toggle Sidebar">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+
+  <div class="logo">
+    <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+      <rect x="2" y="2" width="44" height="44" rx="8" fill="white" fill-opacity=".2"/>
+      <path d="M12 36L24 12L36 36" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M15.5 28h17" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>
+    BorneoGIS GeoPDF Explorer
+  </div>
+
+  <div class="topbar-actions">
+    <button class="btn-icon" id="btn-my-location" title="Lokasi Saya">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
+      </svg>
+    </button>
+    <button class="btn-icon" id="btn-follow-gps" title="Ikuti GPS">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- =================== APP =================== -->
+<div id="app">
+
+  <!-- ===== SIDEBAR ===== -->
+  <div id="sidebar">
+
+    <!-- Tabs -->
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" data-tab="layers" title="Layer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        Layer
+      </button>
+      <button class="tab-btn" data-tab="gps" title="GPS">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+        GPS
+      </button>
+      <button class="tab-btn" data-tab="track" title="Track">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Track
+      </button>
+      <button class="tab-btn" data-tab="measure" title="Ukur">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3L3 21"/><path d="M6.5 3H21V17.5"/><path d="M3 6.5v1.5M3 11v1.5M3 15.5V17"/><path d="M6.5 21h1.5M11 21h1.5M15.5 21H17"/></svg>
+        Ukur
+      </button>
+      <button class="tab-btn" data-tab="search" title="Cari">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Cari
+      </button>
+      <button class="tab-btn" data-tab="project" title="Project">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h6l2 3h10a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/></svg>
+        Project
+      </button>
+    </div>
+
+    <!-- ===== PANEL: LAYERS ===== -->
+    <div class="tab-panel active" id="panel-layers">
+      <div class="panel-section">
+        <div id="upload-zone">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <strong>Upload GeoPDF / GeoJSON / KML / GPX</strong>
+          <p>Drag & drop atau klik untuk memilih file</p>
+        </div>
+        <input type="file" id="file-input" multiple accept=".pdf,.geojson,.json,.kml,.gpx">
+      </div>
+
+      <div class="panel-section" style="flex:1;overflow-y:auto;padding-bottom:16px;">
+        <div class="section-title">Layer Aktif</div>
+        <div id="layer-list">
+          <p class="empty-layers">Belum ada layer.<br>Upload GeoPDF, GeoJSON, KML, atau GPX.</p>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Basemap</div>
+        <div class="basemap-list">
+          <div class="basemap-item active" data-basemap="osm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="basemap-name">OpenStreetMap</span>
+            <div class="basemap-radio"></div>
+          </div>
+          <div class="basemap-item" data-basemap="satellite">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 7h20M2 17h20"/></svg>
+            <span class="basemap-name">Esri Satellite</span>
+            <div class="basemap-radio"></div>
+          </div>
+          <div class="basemap-item" data-basemap="topo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2"><path d="M8 3l4 8 5-5 5 15H1L8 3z"/></svg>
+            <span class="basemap-name">OpenTopoMap</span>
+            <div class="basemap-radio"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANEL: GPS ===== -->
+    <div class="tab-panel" id="panel-gps">
+      <div class="panel-section">
+        <div class="gps-status">
+          <div class="gps-dot" id="gps-dot"></div>
+          <span id="gps-status-text" style="font-size:13px;font-weight:500;">GPS tidak aktif</span>
+        </div>
+        <button class="btn btn-success btn-full" id="btn-gps-toggle">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+          Aktifkan GPS
+        </button>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Posisi & Status</div>
+        <div class="gps-info-grid">
+          <div class="gps-card">
+            <div class="label">Latitude</div>
+            <div class="value" id="gps-lat">—</div>
+          </div>
+          <div class="gps-card">
+            <div class="label">Longitude</div>
+            <div class="value" id="gps-lng">—</div>
+          </div>
+          <div class="gps-card">
+            <div class="label">Akurasi</div>
+            <div class="value" id="gps-acc">—</div>
+          </div>
+          <div class="gps-card">
+            <div class="label">Kecepatan</div>
+            <div class="value" id="gps-spd">—</div>
+          </div>
+          <div class="gps-card" style="grid-column:1/-1">
+            <div class="label">Arah (Heading)</div>
+            <div class="value" id="gps-head">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Navigasi</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-full" onclick="document.getElementById('btn-my-location').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+            Lokasi Saya
+          </button>
+          <button class="btn btn-outline btn-full" onclick="document.getElementById('btn-follow-gps').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            Ikuti GPS
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANEL: TRACK ===== -->
+    <div class="tab-panel" id="panel-track">
+      <div class="panel-section">
+        <div class="track-timer" id="track-timer">00:00:00</div>
+        <div class="track-stats">
+          <div class="gps-card">
+            <div class="label">Jarak</div>
+            <div class="value" id="track-dist">0 m</div>
+          </div>
+          <div class="gps-card">
+            <div class="label">Titik</div>
+            <div class="value" id="track-pts">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Kontrol Rekam</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">
+          <button class="btn btn-success" id="btn-track-start" style="flex:1">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>
+            Start
+          </button>
+          <button class="btn btn-outline" id="btn-track-pause" style="flex:1;display:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            Pause
+          </button>
+          <button class="btn btn-success" id="btn-track-resume" style="flex:1;display:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Lanjut
+          </button>
+          <button class="btn btn-danger" id="btn-track-stop" style="flex:1;display:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            Stop
+          </button>
+          <button class="btn btn-ghost btn-full" id="btn-track-clear">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+            Hapus Track
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Export Track</div>
+        <div class="export-grid">
+          <button class="btn btn-outline" id="btn-export-gpx">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            GPX
+          </button>
+          <button class="btn btn-outline" id="btn-export-track-json">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            GeoJSON
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANEL: MEASURE ===== -->
+    <div class="tab-panel" id="panel-measure">
+      <div class="panel-section">
+        <div class="section-title">Alat Ukur</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="btn btn-outline btn-full" id="btn-measure-dist">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="12" x2="22" y2="12"/><polyline points="19 9 22 12 19 15"/><polyline points="5 9 2 12 5 15"/></svg>
+            Ukur Jarak
+          </button>
+          <button class="btn btn-outline btn-full" id="btn-measure-area">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 20 2 20"/></svg>
+            Ukur Luas
+          </button>
+        </div>
+        <button class="btn btn-ghost btn-full" id="btn-measure-clear">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Hapus Hasil
+        </button>
+      </div>
+
+      <div class="panel-section">
+        <p id="measure-hint" style="font-size:12px;color:#4B5563;">Pilih mode pengukuran di atas.</p>
+        <div class="measure-result" id="measure-result">
+          <div class="label" id="measure-label">Jarak</div>
+          <div class="value" id="measure-value">—</div>
+          <div class="sub" id="measure-sub"></div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Cara Pakai</div>
+        <div style="font-size:12px;color:#4B5563;line-height:1.7;">
+          <div>1. Pilih Ukur Jarak atau Ukur Luas</div>
+          <div>2. Klik peta untuk menambah titik</div>
+          <div>3. Klik ganda untuk mengakhiri</div>
+          <div>4. Hasil tampil otomatis</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANEL: SEARCH ===== -->
+    <div class="tab-panel" id="panel-search">
+      <div class="panel-section">
+        <div class="section-title">Cari Koordinat</div>
+        <div class="search-input-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Contoh: -1.2345, 116.7890" inputmode="decimal">
+        </div>
+        <button class="btn btn-primary btn-full" id="btn-search-coord">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Cari Koordinat
+        </button>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Format yang Didukung</div>
+        <div style="font-size:12px;color:#4B5563;line-height:2;">
+          <code style="background:#F5F7FA;padding:2px 6px;border-radius:3px;font-size:11px;">-1.2345, 116.7890</code><br>
+          <code style="background:#F5F7FA;padding:2px 6px;border-radius:3px;font-size:11px;">1.2345 116.7890</code><br>
+          <span style="color:#9CA3AF;">Format UTM segera hadir</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANEL: PROJECT ===== -->
+    <div class="tab-panel" id="panel-project">
+      <div class="panel-section">
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-full" id="btn-new-project">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Project Baru
+          </button>
+          <button class="btn btn-outline btn-full" id="btn-save-project">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Simpan
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-section" style="flex:1;overflow-y:auto;padding-bottom:16px;">
+        <div class="section-title">Project Saya</div>
+        <div id="project-list">
+          <p class="empty-layers">Belum ada project.<br>Buat project pertama Anda.</p>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Export</div>
+        <div class="export-grid">
+          <button class="btn btn-outline" id="btn-export-png">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            PNG Map
+          </button>
+          <button class="btn btn-outline" id="btn-export-zip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            ZIP Project
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ===== MAP ===== -->
+  <div style="position:relative;flex:1;height:100%;">
+    <div id="map"></div>
+
+    <!-- Map FABs (duplicated from topbar for in-map access) -->
+    <div id="map-controls">
+      <!-- zoom controls are handled by Leaflet default -->
+    </div>
+
+    <!-- Coordinate bar -->
+    <div id="coord-bar">
+      <span id="coord-cursor">—</span>
+      <span style="color:#D1D5DB">|</span>
+      <span id="coord-gps">GPS —</span>
+      <span style="color:#D1D5DB">|</span>
+      <span id="coord-zoom">Z7</span>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- =================== INSTALL BANNER =================== -->
+<div id="install-banner">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  <span>Instal BorneoGIS sebagai aplikasi</span>
+  <button id="btn-install-app">Install</button>
+  <button id="btn-dismiss-install" class="close-install">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</div>
+
+<!-- =================== TOAST =================== -->
+<div id="toast-container"></div>
+
+<!-- =================== MODALS =================== -->
+
+<!-- New Project Modal -->
+<div class="modal-overlay" id="modal-new-project">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Project Baru</h3>
+      <button class="modal-close" data-close-modal="modal-new-project">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Nama Project</label>
+        <input type="text" id="new-project-name" placeholder="Contoh: Survei Desa Susuk Dalam">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-new-project">Batal</button>
+      <button class="btn btn-primary" id="btn-create-project-confirm">Buat Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bounds Modal (for GeoPDF without embedded geo data) -->
+<div class="modal-overlay" id="modal-bounds">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Tentukan Batas Peta GeoPDF</h3>
+      <button class="modal-close" data-close-modal="modal-bounds">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#4B5563;margin-bottom:14px;">
+        GeoPDF ini tidak memiliki informasi georeferensi yang dapat dibaca otomatis.
+        Masukkan koordinat batas peta secara manual.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field">
+          <label>Min Latitude (Selatan)</label>
+          <input type="number" id="bounds-min-lat" placeholder="-2.5" step="any">
+        </div>
+        <div class="field">
+          <label>Max Latitude (Utara)</label>
+          <input type="number" id="bounds-max-lat" placeholder="-1.5" step="any">
+        </div>
+        <div class="field">
+          <label>Min Longitude (Barat)</label>
+          <input type="number" id="bounds-min-lng" placeholder="116.5" step="any">
+        </div>
+        <div class="field">
+          <label>Max Longitude (Timur)</label>
+          <input type="number" id="bounds-max-lng" placeholder="117.5" step="any">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-bounds">Batal</button>
+      <button class="btn btn-primary" id="btn-bounds-confirm">Tampilkan Peta</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================== SCRIPTS =================== -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/js/app.js"></script>
+
+</body>
+</html>

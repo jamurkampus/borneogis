@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>BorneoGIS Explorer — Browser-Native GIS Workspace</title>
+<meta name="description" content="Aplikasi GIS profesional berbasis browser. Upload GeoPDF, GeoJSON, KML, GPX, Shapefile. Ukur, digitasi, analisis spasial, dan bekerja offline — tanpa login, tanpa server." />
+<meta name="theme-color" content="#0B1220" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon-192.svg" />
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet.draw -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-theme="dark">
+
+<!-- ===================== SPLASH / LOADER ===================== -->
+<div id="splash" class="splash">
+  <div class="splash-grid">
+    <span></span><span></span><span></span><span></span>
+  </div>
+  <p class="splash-label">Menyiapkan ruang kerja geospasial…</p>
+</div>
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="topbar">
+  <button id="btnSidebarToggle" class="icon-btn" aria-label="Buka/tutup panel layer" title="Layer Manager">
+    <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+  </button>
+
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="brand-text">
+      <strong>BorneoGIS</strong><em>Explorer</em>
+    </div>
+  </div>
+
+  <div class="searchbar">
+    <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="searchInput" type="text" placeholder="Cari koordinat (lat,lng) · alamat · nama objek…" autocomplete="off" />
+    <button id="btnSearchClear" class="search-clear" title="Bersihkan" hidden>&times;</button>
+    <div id="searchResults" class="search-results" hidden></div>
+  </div>
+
+  <div class="topbar-actions">
+    <button id="btnTheme" class="icon-btn" title="Ganti tema terang/gelap">
+      <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <button id="btnLang" class="icon-btn lang-btn" title="EN / ID">ID</button>
+    <button id="btnDashboard" class="icon-btn" title="Dashboard">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+    </button>
+    <button id="btnFullscreen" class="icon-btn" title="Layar penuh">
+      <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ===================== LEFT SIDEBAR ===================== -->
+<aside id="sidebar" class="sidebar">
+  <nav class="sidebar-tabs" id="sidebarTabs">
+    <!-- PDF Maps Library — primary Avenza-like flow -->
+    <button class="tab-btn active" data-tab="maps" title="PDF Maps Library">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="gps" title="GPS &amp; Tracking">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="layers" title="Layer Vektor">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="upload" title="Upload Data">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="measure" title="Pengukuran">
+      <svg viewBox="0 0 24 24"><path d="M21.3 8.7 15.3 2.7a1 1 0 0 0-1.4 0L2.7 13.9a1 1 0 0 0 0 1.4l6 6a1 1 0 0 0 1.4 0L21.3 10.1a1 1 0 0 0 0-1.4Z"/><path d="m7.5 10.5 2 2M11 7l2 2M14.5 3.5l2 2"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="draw" title="Digitasi">
+      <svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="analysis" title="Analisis GIS">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M6.5 7.2 10 10M17.5 7.2 14 10M6.5 16.8 10 14M17.5 16.8 14 14"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="offline" title="Offline">
+      <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.8 19.8 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    </button>
+    <button class="tab-btn" data-tab="ai" title="AI Assistant">
+      <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>
+    </button>
+  </nav>
+
+  <div class="sidebar-panels">
+
+    <!-- ===== PDF MAPS LIBRARY (primary — like Avenza) ===== -->
+    <section class="panel active" data-panel="maps">
+      <div class="panel-head">
+        <h2>PDF Maps</h2>
+        <button id="btnAddPdf" class="btn-primary-sm">+ Tambah PDF</button>
+      </div>
+      <input id="pdfFileInput" type="file" multiple hidden
+        accept=".pdf,application/pdf" />
+
+      <!-- Active map card -->
+      <div id="activePdfCard" class="active-pdf-card" hidden>
+        <div class="apc-thumb-wrap">
+          <img id="activePdfThumb" class="apc-thumb" alt="preview" />
+          <span class="apc-badge">AKTIF</span>
+        </div>
+        <div class="apc-info">
+          <div class="apc-name" id="activePdfName">—</div>
+          <div class="apc-coords" id="activePdfCoords">—</div>
+          <div class="apc-controls">
+            <label style="font-size:10.5px;color:var(--text-faint)">Opacity</label>
+            <input id="activePdfOpacity" type="range" min="0" max="100" value="90" />
+            <label style="font-size:10.5px;color:var(--text-faint)">Rotasi</label>
+            <input id="activePdfRotation" type="range" min="0" max="359" value="0" />
+          </div>
+          <div class="row-inline" style="margin-top:8px">
+            <button id="btnPdfGeoref" class="btn-ghost-sm" style="flex:1">📍 Georef</button>
+            <button id="btnPdfFitBounds" class="btn-ghost-sm" style="flex:1">🔍 Zoom</button>
+            <button id="btnPdfClose" class="btn-ghost-sm" style="color:var(--danger)">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="noActivePdf" class="no-pdf-hint">
+        <svg viewBox="0 0 24 24" style="width:36px;height:36px;opacity:.3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>Belum ada peta aktif.<br/>Tambah GeoPDF untuk navigasi.</p>
+      </div>
+
+      <!-- Basemap selector (for users without PDF) -->
+      <div class="maps-section-label">Basemap</div>
+      <select id="basemapSelect" class="select" style="margin-bottom:10px">
+        <option value="osm">OpenStreetMap</option>
+        <option value="esri">Esri World Imagery</option>
+        <option value="carto-dark">Carto Dark</option>
+        <option value="carto-light">Carto Light</option>
+        <option value="otm">OpenTopoMap</option>
+        <option value="gsat">Google Satellite</option>
+      </select>
+
+      <!-- PDF Library -->
+      <div class="maps-section-label">Library PDF tersimpan <span class="badge" id="pdfLibCount">0</span></div>
+      <div id="pdfLibraryGrid" class="pdf-library-grid">
+        <p class="empty-hint" id="pdfLibEmptyHint">Belum ada PDF tersimpan.</p>
+      </div>
+    </section>
+
+    <!-- LAYERS PANEL (vector layers) -->
+    <section class="panel" data-panel="layers">
+      <div class="panel-head">
+        <h2>Layer Vektor</h2>
+        <span class="badge" id="layerCount">0</span>
+      </div>
+      <ul id="layerTree" class="layer-tree"></ul>
+      <p class="empty-hint" id="layerEmptyHint">Belum ada layer vektor. Upload GeoJSON, KML, GPX, atau CSV.</p>
+    </section>
+    <section class="panel" data-panel="upload">
+      <div class="panel-head"><h2>Upload Data Geospasial</h2></div>
+      <div id="dropZone" class="dropzone">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p><strong>Tarik &amp; lepas file di sini</strong><br/>atau klik untuk memilih</p>
+        <span class="dz-types">GeoPDF · PDF · GeoJSON · KML · GPX · CSV · ZIP Shapefile</span>
+        <input id="fileInput" type="file" multiple hidden
+          accept=".pdf,application/pdf,.geojson,.json,application/geo+json,.kml,application/vnd.google-earth.kml+xml,.gpx,application/gpx+xml,.csv,text/csv,.zip,application/zip,application/x-zip-compressed" />
+      </div>
+      <button id="btnPickFile" class="btn-primary-sm full" style="margin-top:10px;">
+        📂 Pilih File dari Perangkat
+      </button>
+      <p class="panel-note" style="margin-top:8px;">
+        <strong>Di HP Android:</strong> tap tombol di atas → pilih "File" atau "Unduhan" → cari file PDF/KML/GeoJSON kamu. Jika PDF tidak muncul, pilih "Semua file" di file picker.
+      </p>
+      <div id="uploadQueue" class="upload-queue"></div>
+      <div class="panel-note">
+        <strong>Tanpa batas ukuran.</strong> Semua data diproses &amp; disimpan lokal di perangkat (IndexedDB) — tidak diunggah ke server manapun.
+      </div>
+    </section>
+
+    <!-- MEASURE PANEL -->
+    <section class="panel" data-panel="measure">
+      <div class="panel-head"><h2>Pengukuran</h2></div>
+      <div class="tool-grid">
+        <button class="tool-btn" data-measure="distance"><svg viewBox="0 0 24 24"><path d="M5 12h14M5 12l3-3M5 12l3 3M19 12l-3-3M19 12l-3 3"/></svg>Jarak</button>
+        <button class="tool-btn" data-measure="area"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Luas</button>
+        <button class="tool-btn" data-measure="perimeter"><svg viewBox="0 0 24 24"><polygon points="12 3 21 9 18 20 6 20 3 9"/></svg>Keliling</button>
+        <button class="tool-btn" data-measure="bearing"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12 16 7"/></svg>Bearing/Azimuth</button>
+      </div>
+      <div id="measureResult" class="result-box" hidden></div>
+      <button id="btnMeasureClear" class="btn-ghost-sm full">Bersihkan Pengukuran</button>
+    </section>
+
+    <!-- DRAW / DIGITIZE PANEL -->
+    <section class="panel" data-panel="draw">
+      <div class="panel-head"><h2>Digitasi</h2></div>
+      <div class="tool-grid">
+        <button class="tool-btn" data-draw="marker"><svg viewBox="0 0 24 24"><path d="M12 21s-7-7.2-7-12a7 7 0 0 1 14 0c0 4.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>Titik</button>
+        <button class="tool-btn" data-draw="polyline"><svg viewBox="0 0 24 24"><path d="M4 18 9 7l5 9 6-12"/></svg>Garis</button>
+        <button class="tool-btn" data-draw="polygon"><svg viewBox="0 0 24 24"><polygon points="12 3 21 9 18 20 6 20 3 9"/></svg>Poligon</button>
+        <button class="tool-btn" data-draw="edit"><svg viewBox="0 0 24 24"><path d="m18 2 4 4-12 12-5 1 1-5 12-12z"/></svg>Edit</button>
+        <button class="tool-btn" data-draw="delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Hapus</button>
+        <button class="tool-btn" data-draw="attr"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"/></svg>Atribut</button>
+      </div>
+      <p class="panel-note">Target layer aktif untuk digitasi mengikuti layer yang dipilih di Layer Manager. Jika belum ada, layer "Digitasi Baru" akan dibuat otomatis.</p>
+    </section>
+
+    <!-- ANALYSIS PANEL -->
+    <section class="panel" data-panel="analysis">
+      <div class="panel-head"><h2>Analisis GIS</h2></div>
+      <div class="analysis-block">
+        <label>Buffer</label>
+        <div class="row-inline">
+          <input id="bufferDist" type="number" value="100" min="1" />
+          <select id="bufferUnit"><option value="meters">m</option><option value="kilometers">km</option></select>
+          <button id="btnRunBuffer" class="btn-primary-sm">Jalankan</button>
+        </div>
+      </div>
+      <div class="analysis-block">
+        <label>Operasi 2 Layer (pilih 2 layer di Layer Manager)</label>
+        <div class="tool-grid">
+          <button class="tool-btn" data-analysis="intersect">Intersect</button>
+          <button class="tool-btn" data-analysis="union">Union</button>
+          <button class="tool-btn" data-analysis="clip">Clip</button>
+          <button class="tool-btn" data-analysis="nearest">Nearest</button>
+        </div>
+      </div>
+      <div class="analysis-block">
+        <label>Geometri</label>
+        <div class="tool-grid">
+          <button class="tool-btn" data-analysis="dissolve">Dissolve</button>
+          <button class="tool-btn" data-analysis="calcArea">Hitung Luas</button>
+          <button class="tool-btn" data-analysis="calcLength">Hitung Panjang</button>
+        </div>
+      </div>
+      <div class="analysis-block">
+        <label>Spatial Query</label>
+        <div class="row-inline">
+          <select id="spatialQueryField"><option value="">field…</option></select>
+          <select id="spatialQueryOp"><option value="=">=</option><option value=">">&gt;</option><option value="<">&lt;</option><option value="contains">contains</option></select>
+          <input id="spatialQueryValue" type="text" placeholder="nilai" />
+        </div>
+        <button id="btnRunQuery" class="btn-primary-sm full">Cari Fitur</button>
+      </div>
+      <div id="analysisResult" class="result-box" hidden></div>
+    </section>
+
+    <!-- GPS PANEL -->
+    <section class="panel" data-panel="gps">
+      <div class="panel-head"><h2>GPS &amp; Navigasi</h2></div>
+      <div class="gps-status" id="gpsStatus">
+        <span class="dot off"></span> Lokasi belum aktif
+      </div>
+      <div id="gpsLiveStats" class="gps-live-stats" hidden>
+        <div class="gls-item"><span id="gpsAlt">—</span><small>m (alt)</small></div>
+        <div class="gls-item"><span id="gpsSpeed">—</span><small>km/j</small></div>
+        <div class="gls-item"><span id="gpsAcc">—</span><small>m akurasi</small></div>
+      </div>
+      <div class="tool-grid two">
+        <button id="btnGpsLocate" class="tool-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Lokasi Saya</button>
+        <button id="btnGpsTrack" class="tool-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Mulai Tracking</button>
+      </div>
+      <div class="tool-grid two" style="margin-top:0">
+        <button id="btnWakeLock" class="tool-btn" title="Jaga layar tetap menyala"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>Layar Aktif</button>
+        <button id="btnCompass" class="tool-btn" title="Aktifkan kompas arah"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Kompas</button>
+      </div>
+      <div id="trackInfo" class="result-box" hidden></div>
+      <div class="row-inline">
+        <button id="btnTrackSave" class="btn-ghost-sm full" disabled>💾 Simpan Track sebagai Layer</button>
+      </div>
+      <div class="panel-note">
+        <strong>Import GPX</strong> dari tab Upload. <strong>Export GPX</strong> tersedia di Layer Manager (klik ⋮).
+      </div>
+    </section>
+
+    <!-- AI ASSISTANT PANEL -->
+    <section class="panel" data-panel="ai">
+      <div class="panel-head"><h2>AI GIS Assistant <span class="tag-beta">beta</span></h2></div>
+      <div id="aiChat" class="ai-chat">
+        <div class="ai-msg ai">Halo! Saya asisten GIS lokal. Tanyakan misalnya: <em>"berapa total luas layer Kebun?"</em> atau <em>"layer mana yang punya fitur terbanyak?"</em></div>
+      </div>
+      <div class="ai-input-row">
+        <input id="aiInput" type="text" placeholder="Tanyakan sesuatu tentang data peta Anda…" />
+        <button id="btnAiSend" class="icon-btn primary"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      </div>
+    </section>
+
+    <!-- OFFLINE PANEL -->
+    <section class="panel" data-panel="offline">
+      <div class="panel-head"><h2>Peta Offline</h2><span class="badge tag-beta">PWA</span></div>
+
+      <div class="offline-status glass" id="offlineStatusBar">
+        <span id="offlineIndicator" class="dot"></span>
+        <span id="offlineStatusText">Memeriksa koneksi…</span>
+      </div>
+
+      <div class="analysis-block">
+        <label>Basemap yang diunduh</label>
+        <select id="offlineBasemap" class="select">
+          <option value="osm">OpenStreetMap</option>
+          <option value="carto-dark">Carto Dark</option>
+          <option value="carto-light">Carto Light</option>
+          <option value="otm">OpenTopoMap</option>
+        </select>
+      </div>
+
+      <div class="analysis-block">
+        <label>Area</label>
+        <div class="row-inline">
+          <button id="btnUseCurrentView" class="btn-ghost-sm" style="flex:1">📍 Gunakan Area Tampil</button>
+          <button id="btnDrawArea" class="btn-ghost-sm" style="flex:1">✏️ Gambar Area</button>
+        </div>
+        <div id="offlineAreaInfo" class="offline-area-info">—</div>
+      </div>
+
+      <div class="analysis-block">
+        <label>Level Zoom</label>
+        <div class="row-inline">
+          <span style="font-size:11.5px;color:var(--text-faint)">Min</span>
+          <input id="offlineMinZ" type="number" value="10" min="1" max="18" style="width:60px" />
+          <span style="font-size:11.5px;color:var(--text-faint)">Max</span>
+          <input id="offlineMaxZ" type="number" value="15" min="1" max="18" style="width:60px" />
+          <button id="btnEstimate" class="btn-ghost-sm">Hitung</button>
+        </div>
+        <div id="offlineEstimate" class="offline-estimate" hidden></div>
+      </div>
+
+      <div class="field">
+        <label>Nama Area</label>
+        <input id="offlineAreaName" type="text" placeholder="cth: Desa Susuk Dalam Z10-15" />
+      </div>
+
+      <button id="btnStartDownload" class="btn-primary-sm full">⬇ Unduh Tile Offline</button>
+
+      <div id="offlineProgress" class="offline-progress" hidden>
+        <div class="offline-prog-bar"><div id="offlineProgFill" class="offline-prog-fill"></div></div>
+        <div id="offlineProgText" class="offline-prog-text">0%</div>
+      </div>
+
+      <div class="dash-sub">Area Tersimpan</div>
+      <div id="offlineAreaList" class="offline-area-list">
+        <p class="empty-hint">Belum ada area tersimpan.</p>
+      </div>
+
+      <div class="panel-note" id="offlineStorageNote">
+        Penyimpanan terpakai: menghitung…
+      </div>
+      <button id="btnClearAllTiles" class="btn-ghost-sm full" style="color:var(--danger);border-color:var(--danger)">🗑 Hapus Semua Cache Tile</button>
+    </section>
+
+  </div>
+</aside>
+
+<!-- ===================== MAP ===================== -->
+<main id="mapContainer" class="map-container">
+  <div id="map"></div>
+
+  <!-- floating PDF layer controls -->
+  <div id="pdfControls" class="pdf-controls glass" hidden>
+    <div class="pdf-controls-head">
+      <strong id="pdfControlsName">GeoPDF</strong>
+      <button id="pdfControlsClose" class="icon-btn-sm">&times;</button>
+    </div>
+    <label>Transparansi</label>
+    <input id="pdfOpacity" type="range" min="0" max="100" value="85" />
+    <label>Rotasi</label>
+    <input id="pdfRotation" type="range" min="0" max="359" value="0" />
+    <div class="row-inline">
+      <button id="pdfZoomIn" class="btn-ghost-sm">Zoom +</button>
+      <button id="pdfZoomOut" class="btn-ghost-sm">Zoom −</button>
+    </div>
+    <button id="pdfGeoreference" class="btn-primary-sm full">Georeferensi Manual (4 titik)</button>
+  </div>
+
+  <!-- GPS Follow mode button (appears when GPS active) -->
+  <button id="btnGpsFollow" class="gps-follow-btn glass" hidden>
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    <span id="btnGpsFollowLabel">Ikuti GPS</span>
+  </button>
+
+  <!-- Offline tile indicator -->
+  <div id="offlineBanner" class="offline-banner" hidden>
+    📵 Offline — menampilkan tile tersimpan
+  </div>
+  <div id="coordReadout" class="coord-readout glass">0.00000, 0.00000</div>
+
+  <!-- mobile FAB cluster -->
+  <div class="fab-cluster">
+    <button id="fabLocate" class="fab" title="Lokasi saya">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button id="fabAdd" class="fab fab-main" title="Tambah / Upload">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button id="fabLayers" class="fab" title="Layer">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/></svg>
+    </button>
+  </div>
+
+  <!-- bottom sheet (mobile feature inspector) -->
+  <div id="bottomSheet" class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div id="bottomSheetContent" class="sheet-content"></div>
+  </div>
+</main>
+
+<!-- ===================== DASHBOARD DRAWER ===================== -->
+<aside id="dashboard" class="dashboard glass">
+  <div class="panel-head">
+    <h2>Dashboard</h2>
+    <button id="btnDashboardClose" class="icon-btn-sm">&times;</button>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><span id="statLayers">0</span><label>Layer</label></div>
+    <div class="stat-card"><span id="statFeatures">0</span><label>Fitur</label></div>
+    <div class="stat-card"><span id="statArea">0</span><label>Total Luas (ha)</label></div>
+    <div class="stat-card"><span id="statLength">0</span><label>Total Panjang (km)</label></div>
+  </div>
+  <h3 class="dash-sub">Statistik per Layer</h3>
+  <div id="dashLayerStats" class="dash-list"></div>
+  <h3 class="dash-sub">Export</h3>
+  <div class="export-grid">
+    <button class="btn-ghost-sm" data-export="geojson">GeoJSON</button>
+    <button class="btn-ghost-sm" data-export="kml">KML</button>
+    <button class="btn-ghost-sm" data-export="gpx">GPX</button>
+    <button class="btn-ghost-sm" data-export="csv">CSV</button>
+    <button class="btn-ghost-sm" data-export="png">PNG Peta</button>
+    <button class="btn-ghost-sm" data-export="pdf">PDF Peta</button>
+  </div>
+</aside>
+<div id="scrim" class="scrim"></div>
+
+<!-- ===================== ATTRIBUTE / GEOREF MODALS ===================== -->
+<div id="modalRoot"></div>
+
+<!-- toasts -->
+<div id="toastStack" class="toast-stack"></div>
+
+<!-- ===================== LIBRARIES (CDN) ===================== -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/leaflet-geometryutil@0.10.3/src/leaflet.geometryutil.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://unpkg.com/[email protected]/build/pdf.min.js"></script>
+<script src="https://unpkg.com/[email protected]/dist/jszip.min.js"></script>
+<script src="https://unpkg.com/shpjs@4.0.4/dist/shp.min.js"></script>
+<script src="https://unpkg.com/@mapbox/[email protected]/togeojson.js"></script>
+<script src="https://unpkg.com/[email protected]/leaflet-image.js"></script>
+
+<!-- ===================== APP MODULES ===================== -->
+<script src="js/db.js"></script>
+<script src="js/map.js"></script>
+<script src="js/layerManager.js"></script>
+<script src="js/geospatialTools.js"></script>
+<script src="js/pdfViewer.js"></script>
+<script src="js/offlineTiles.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

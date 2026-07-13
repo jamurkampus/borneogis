@@ -2,9 +2,11 @@
  * geopdf.js — Load & render GeoPDF onto Leaflet map
  *
  * Strategy:
- * 1. Use PDF.js to render each page to a canvas
- * 2. Extract geospatial metadata (viewport CRS info) when present
- * 3. Fall back to user-defined bounds if no GeoTIFF-style bbox found
+ * 1. Scan raw PDF bytes for /Measure /GPTS /LPTS (GeoPDF georeferencing
+ *    dictionary). PDF.js does not expose these through its public API,
+ *    so this is done via direct byte scanning before rendering.
+ * 2. Use PDF.js to render each page to a canvas
+ * 3. Fall back to user-defined bounds only if no Measure dictionary found
  * 4. Display as Leaflet ImageOverlay
  */
 
@@ -31,31 +33,6 @@ async function ensurePDFJS() {
 }
 
 /**
- * Parse geospatial bbox from PDF metadata / viewport
- * Returns { minLat, minLng, maxLat, maxLng } or null
- */
-function parseGeoBounds(pdfDoc, page) {
-  try {
-    // PDF viewport in user units
-    const vp     = page.getViewport({ scale: 1 });
-    const width  = vp.width;
-    const height = vp.height;
-
-    // Try to pull measure dictionary from page.ref via internal API
-    // This works for GeoPDFs exported from QGIS / ArcGIS
-    const pageObj = page._pageInfo;
-    if (pageObj && pageObj.view) {
-      // Some internal structures expose geo transform
-    }
-
-    // Fallback: attempt to read XMP / pdfmark metadata
-    return null; // Will be handled by manual bounds input
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Render a PDF page to a canvas at given scale
  */
 async function renderPageToCanvas(page, scale = 2) {
@@ -70,11 +47,103 @@ async function renderPageToCanvas(page, scale = 2) {
 }
 
 /**
+ * Convert an ArrayBuffer to a binary-safe string (1 char per byte).
+ * We deliberately avoid TextDecoder('utf-8') here because PDF structure
+ * bytes are not UTF-8 and must map 1:1 so indexOf/slice offsets stay valid.
+ */
+function bytesToLatin1String(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let result = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    result += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return result;
+}
+
+/**
+ * Given text and the index right after an opening '[', read numbers up to
+ * the matching ']'.
+ */
+function extractNumbersFromArray(text, startIdx) {
+  const end = text.indexOf(']', startIdx);
+  if (end === -1) return null;
+  const raw = text.slice(startIdx, end);
+  const nums = raw.match(/-?\d+\.?\d*(?:[eE][-+]?\d+)?/g);
+  return nums ? nums.map(Number) : null;
+}
+
+/**
+ * Scan raw PDF bytes for a /Measure dictionary containing /GPTS (geographic
+ * corner points) and optionally /LPTS (page-space corner points).
+ *
+ * This covers GeoPDFs exported from ArcGIS "Publish to GeoPDF", TerraGo,
+ * and QGIS georeferencing plugins, which store this metadata as plain
+ * text inside the page's /VP (Viewport) dictionary — uncompressed, since
+ * it must remain readable by third-party GeoPDF readers.
+ *
+ * Known limitation: if a PDF producer compresses page objects into an
+ * object stream (/ObjStm), this scan will miss the dictionary. This is
+ * uncommon for GeoPDFs specifically because compressing georeferencing
+ * metadata breaks compatibility with most GeoPDF readers, but if you hit
+ * a file this doesn't catch, that's the next thing to handle.
+ *
+ * Returns { bounds, gpts, lpts } or null
+ */
+function scanRawPDFForGeoBounds(buffer) {
+  const text = bytesToLatin1String(buffer);
+
+  let searchFrom = 0;
+  while (true) {
+    const measureIdx = text.indexOf('/Measure', searchFrom);
+    if (measureIdx === -1) return null;
+
+    const window = text.slice(measureIdx, measureIdx + 4000);
+    const gptsMatch = window.match(/\/GPTS\s*\[/);
+
+    if (gptsMatch) {
+      const gptsStart = measureIdx + gptsMatch.index + gptsMatch[0].length;
+      const gpts = extractNumbersFromArray(text, gptsStart);
+
+      if (gpts && gpts.length >= 6 && gpts.length % 2 === 0) {
+        let lpts = null;
+        const lptsMatch = window.match(/\/LPTS\s*\[/);
+        if (lptsMatch) {
+          const lptsStart = measureIdx + lptsMatch.index + lptsMatch[0].length;
+          lpts = extractNumbersFromArray(text, lptsStart);
+        }
+
+        const lats = [], lngs = [];
+        for (let i = 0; i < gpts.length; i += 2) {
+          lats.push(gpts[i]);
+          lngs.push(gpts[i + 1]);
+        }
+
+        return {
+          bounds: {
+            minLat: Math.min(...lats),
+            maxLat: Math.max(...lats),
+            minLng: Math.min(...lngs),
+            maxLng: Math.max(...lngs)
+          },
+          gpts,
+          lpts
+        };
+      }
+    }
+
+    // This /Measure occurrence didn't have a usable /GPTS nearby, keep
+    // looking in case the PDF has multiple viewport entries.
+    searchFrom = measureIdx + 8;
+  }
+}
+
+/**
  * Main entry point: load a GeoPDF file (ArrayBuffer) and return layer info
  *
  * @param {ArrayBuffer} buffer
  * @param {string} filename
- * @returns {Promise<{canvas, bounds, pageCount, suggestedBounds}>}
+ * @returns {Promise<{canvas, bounds, pageCount, suggestedBounds, metadata, filename}>}
  */
 export async function loadGeoPDF(buffer, filename) {
   const lib = await ensurePDFJS();
@@ -85,65 +154,28 @@ export async function loadGeoPDF(buffer, filename) {
   // Render at 2x for quality
   const canvas = await renderPageToCanvas(page, 2);
 
-  // Try metadata extraction
+  // Try metadata extraction (author/title/etc, unrelated to georeferencing)
   let metadata = null;
   try {
     metadata = await pdf.getMetadata();
   } catch { /* ignore */ }
 
-  // Try to extract geo bounds from PDF ViewerPreferences / Measure dictionary
-  let bounds = null;
-  bounds = extractBoundsFromPage(page);
+  // Try to extract geo bounds directly from raw PDF bytes.
+  // This is what actually finds ArcGIS/TerraGo/QGIS GeoPDF georeferencing —
+  // PDF.js's page API does not expose /VP or /Measure dictionaries.
+  let geo = null;
+  try {
+    geo = scanRawPDFForGeoBounds(buffer);
+  } catch { /* ignore, fall through to manual bounds */ }
 
   return {
     canvas,
-    bounds,      // null if not found → prompt user
+    bounds: geo ? geo.bounds : null,   // null if not found → prompt user for manual bounds
+    lpts: geo ? geo.lpts : null,       // kept for a future affine-transform upgrade
     pageCount: pdf.numPages,
     metadata,
     filename
   };
-}
-
-/**
- * Attempt to extract LPTS / Measure from PDF internals
- * This covers QGIS-exported GeoPDF with /Measure dictionary
- */
-function extractBoundsFromPage(page) {
-  try {
-    // PDF.js exposes page._pageInfo with raw PDF objects in some builds
-    const info = page._pageInfo;
-    if (!info) return null;
-
-    // Walk through raw page dict for /VP (Viewport) with /Measure
-    const vpArr = info.VP || (info.pageDict && info.pageDict.get && info.pageDict.get('VP'));
-    if (!vpArr) return null;
-
-    // Each viewport entry has /BBox and /Measure with /GPTS (geographic points)
-    const first = Array.isArray(vpArr) ? vpArr[0] : vpArr;
-    if (!first) return null;
-
-    const measure = first.get ? first.get('Measure') : first.Measure;
-    if (!measure) return null;
-
-    const gpts = measure.get ? measure.get('GPTS') : measure.GPTS;
-    if (!gpts || !gpts.length) return null;
-
-    // GPTS is pairs of [lat, lng] for corners: [ll, ul, ur, lr]
-    const lats = [], lngs = [];
-    for (let i = 0; i < gpts.length; i += 2) {
-      lats.push(gpts[i]);
-      lngs.push(gpts[i + 1]);
-    }
-
-    return {
-      minLat: Math.min(...lats),
-      maxLat: Math.max(...lats),
-      minLng: Math.min(...lngs),
-      maxLng: Math.max(...lngs)
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**

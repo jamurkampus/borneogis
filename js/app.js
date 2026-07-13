@@ -3,7 +3,8 @@
  */
 
 import { initPWA, triggerInstall, dismissInstall, applyUpdate, dismissUpdate } from './pwa.js';
-import { initLayers, getLayers, addGeoPDFLayer, addVectorLayer, toggleLayer, setLayerOpacity, removeLayer, reorderLayers } from './layers.js';
+import { initLayers, getLayers, addGeoPDFLayer, addGeoPDFLayerFromCanvas, addVectorLayer, toggleLayer, setLayerOpacity, removeLayer, reorderLayers } from './layers.js';
+import { initGeoref, openGeoref } from './georef.js';
 import { initGPS, startGPS, stopGPS, setFollowing, getLastPosition, isRunning as gpsRunning } from './gps.js';
 import { initTracking, startTrack, pauseTrack, resumeTrack, stopTrack, clearTrack, isRecording, isPaused, isStopped, formatElapsed, getDistance, getPointCount, exportGPX, exportGeoJSON } from './tracking.js';
 import { initMeasure, startMeasureDistance, startMeasureArea, clearMeasure, formatDistance, formatArea, formatAreaSub } from './measure.js';
@@ -23,6 +24,7 @@ let dragSrcIdx  = null;
 document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initMap();
+  initGeoref();
   initSidebar();
   initUpload();
   initGPSPanel();
@@ -123,7 +125,16 @@ async function handleFiles(fileList) {
       const buf = await file.arrayBuffer();
       const res = await addGeoPDFLayer(buf, file.name, null);
       if (res && res.needsBounds) {
-        openBoundsModal(res);
+        const georef = await openGeoref(res.result);
+        if (georef && georef.fallbackManual) {
+          openBoundsModal(res);
+        } else if (georef && georef.bounds) {
+          await addGeoPDFLayerFromCanvas(
+            res.buffer, res.filename, georef.warpedCanvas, georef.bounds,
+            { transform: georef.transform, rmse: georef.rmse }
+          );
+        }
+        // georef === null → user cancelled entirely, do nothing
       }
     } else if (['geojson', 'json', 'kml', 'gpx'].includes(ext)) {
       const text = await file.text();

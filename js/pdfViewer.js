@@ -18,8 +18,7 @@ let _dragging = false;
 let _dragStart = null;
 let _onPlaceOnMap = null;
 
-export function initPdfViewer(onPlaceOnMap) {
-  _onPlaceOnMap = onPlaceOnMap;
+export function initPdfViewer() {
   if (document.getElementById(MODAL_ID)) return;
   injectStyles();
   buildModalDOM();
@@ -29,9 +28,8 @@ export function initPdfViewer(onPlaceOnMap) {
  * Show a PDF canvas standalone, no map involved.
  * @param {HTMLCanvasElement} canvas
  * @param {string} filename
- * @param {{buffer, result}} ctx - passed through if user later chooses "Tempatkan di Peta"
  */
-export function showPdfOnly(canvas, filename, ctx) {
+export function showPdfOnly(canvas, filename) {
   _canvas = canvas;
   _zoom = 1; _panX = 0; _panY = 0;
 
@@ -41,11 +39,6 @@ export function showPdfOnly(canvas, filename, ctx) {
   target.height = canvas.height;
   target.getContext('2d').drawImage(canvas, 0, 0);
   applyTransform();
-
-  document.getElementById('btn-pdf-place-on-map').onclick = () => {
-    document.getElementById(MODAL_ID).classList.remove('open');
-    if (_onPlaceOnMap) _onPlaceOnMap(ctx);
-  };
 
   document.getElementById(MODAL_ID).classList.add('open');
 }
@@ -72,8 +65,6 @@ function buildModalDOM() {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" data-pdf-close>Tutup</button>
-        <div style="flex:1"></div>
-        <button type="button" class="btn-primary" id="btn-pdf-place-on-map">Tempatkan di Peta</button>
       </div>
     </div>
   `;

@@ -3,8 +3,7 @@
  */
 
 import { initPWA, triggerInstall, dismissInstall, applyUpdate, dismissUpdate } from './pwa.js';
-import { initLayers, getLayers, addGeoPDFLayer, addGeoPDFLayerFromCanvas, addVectorLayer, toggleLayer, setLayerOpacity, removeLayer, reorderLayers } from './layers.js';
-import { initGeoref, openGeoref } from './georef.js';
+import { initLayers, getLayers, addGeoPDFLayer, addVectorLayer, toggleLayer, setLayerOpacity, removeLayer, reorderLayers } from './layers.js';
 import { initPdfViewer, showPdfOnly } from './pdfViewer.js';
 import { initGPS, startGPS, stopGPS, setFollowing, getLastPosition, isRunning as gpsRunning } from './gps.js';
 import { initTracking, startTrack, pauseTrack, resumeTrack, stopTrack, clearTrack, isRecording, isPaused, isStopped, formatElapsed, getDistance, getPointCount, exportGPX, exportGeoJSON } from './tracking.js';
@@ -25,17 +24,8 @@ let dragSrcIdx  = null;
 document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initMap();
-  initGeoref();
-  initPdfViewer(async (ctx) => {
-    const georef = await openGeoref(ctx.result);
-    if (georef && georef.fallbackManual) {
-      openBoundsModal({ result: ctx.result, buffer: ctx.buffer, filename: ctx.filename });
-    } else if (georef && georef.bounds) {
-      await addGeoPDFLayerFromCanvas(
-        ctx.buffer, ctx.filename, georef.warpedCanvas, georef.bounds,
-        { transform: georef.transform, rmse: georef.rmse }
-      );
-    }
+  initPdfViewer((ctx) => {
+    openBoundsModal(ctx);
   });
   initSidebar();
   initUpload();

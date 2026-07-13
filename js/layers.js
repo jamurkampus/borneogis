@@ -80,6 +80,60 @@ export async function addGeoPDFLayer(buffer, filename, bounds) {
 }
 
 /**
+ * Add a GeoPDF layer using a pre-rendered canvas + bounds that already
+ * came from manual georeferencing (see georef.js). The canvas passed in
+ * may already be warped to north-up if the transform included rotation,
+ * so this does not call loadGeoPDF() again — it trusts the caller.
+ *
+ * @param {ArrayBuffer} buffer - original file bytes, kept for storage/reopen
+ * @param {string} filename
+ * @param {HTMLCanvasElement} canvas - already north-up aligned
+ * @param {{minLat,maxLat,minLng,maxLng}} bounds
+ * @param {object} meta - optional { transform, rmse } for reference/debugging
+ */
+export async function addGeoPDFLayerFromCanvas(buffer, filename, canvas, bounds, meta = {}) {
+  try {
+    const imageUrl = canvasToImageURL(canvas);
+    const leafletBounds = [
+      [bounds.minLat, bounds.minLng],
+      [bounds.maxLat, bounds.maxLng]
+    ];
+
+    const overlay = L.imageOverlay(imageUrl, leafletBounds, {
+      opacity: 1,
+      zIndex: 200
+    });
+    overlay.addTo(_map);
+    _map.fitBounds(leafletBounds);
+
+    const id = 'layer_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+    await saveLayerBlob({ id, type: 'pdf', filename, buffer, bounds, georef: meta });
+
+    const layer = {
+      id,
+      name: filename.replace(/\.[^.]+$/, ''),
+      type: 'pdf',
+      visible: true,
+      opacity: 1,
+      leafletLayer: overlay,
+      bounds,
+      imageUrl,
+      georef: meta
+    };
+    _layers.unshift(layer);
+    notify();
+
+    const rmseNote = meta.rmse != null ? `, RMSE ${meta.rmse.toFixed(1)} m` : '';
+    showToast(`${layer.name} dimuat (georeferensi manual${rmseNote})`, 'success');
+    return { ok: true, layer };
+  } catch (err) {
+    showToast('Gagal memuat layer: ' + err.message, 'error');
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Add GeoJSON / KML / GPX overlay
  */
 export async function addVectorLayer(text, filename) {

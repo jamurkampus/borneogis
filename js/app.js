@@ -5,6 +5,7 @@
 import { initPWA, triggerInstall, dismissInstall, applyUpdate, dismissUpdate } from './pwa.js';
 import { initLayers, getLayers, addGeoPDFLayer, addGeoPDFLayerFromCanvas, addVectorLayer, toggleLayer, setLayerOpacity, removeLayer, reorderLayers } from './layers.js';
 import { initGeoref, openGeoref } from './georef.js';
+import { initPdfViewer, showPdfOnly } from './pdfViewer.js';
 import { initGPS, startGPS, stopGPS, setFollowing, getLastPosition, isRunning as gpsRunning } from './gps.js';
 import { initTracking, startTrack, pauseTrack, resumeTrack, stopTrack, clearTrack, isRecording, isPaused, isStopped, formatElapsed, getDistance, getPointCount, exportGPX, exportGeoJSON } from './tracking.js';
 import { initMeasure, startMeasureDistance, startMeasureArea, clearMeasure, formatDistance, formatArea, formatAreaSub } from './measure.js';
@@ -25,6 +26,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initMap();
   initGeoref();
+  initPdfViewer(async (ctx) => {
+    const georef = await openGeoref(ctx.result);
+    if (georef && georef.fallbackManual) {
+      openBoundsModal({ result: ctx.result, buffer: ctx.buffer, filename: ctx.filename });
+    } else if (georef && georef.bounds) {
+      await addGeoPDFLayerFromCanvas(
+        ctx.buffer, ctx.filename, georef.warpedCanvas, georef.bounds,
+        { transform: georef.transform, rmse: georef.rmse }
+      );
+    }
+  });
   initSidebar();
   initUpload();
   initGPSPanel();
@@ -125,16 +137,10 @@ async function handleFiles(fileList) {
       const buf = await file.arrayBuffer();
       const res = await addGeoPDFLayer(buf, file.name, null);
       if (res && res.needsBounds) {
-        const georef = await openGeoref(res.result);
-        if (georef && georef.fallbackManual) {
-          openBoundsModal(res);
-        } else if (georef && georef.bounds) {
-          await addGeoPDFLayerFromCanvas(
-            res.buffer, res.filename, georef.warpedCanvas, georef.bounds,
-            { transform: georef.transform, rmse: georef.rmse }
-          );
-        }
-        // georef === null → user cancelled entirely, do nothing
+        // No embedded georeferencing found — just show the PDF, like Avenza
+        // does with an unreferenced map. Placing it on the map is optional,
+        // triggered by the "Tempatkan di Peta" button inside the viewer.
+        showPdfOnly(res.result.canvas, res.filename, res);
       }
     } else if (['geojson', 'json', 'kml', 'gpx'].includes(ext)) {
       const text = await file.text();

@@ -24,9 +24,7 @@ let dragSrcIdx  = null;
 document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initMap();
-  initPdfViewer((ctx) => {
-    openBoundsModal(ctx);
-  });
+  initPdfViewer();
   initSidebar();
   initUpload();
   initGPSPanel();
@@ -130,7 +128,7 @@ async function handleFiles(fileList) {
         // No embedded georeferencing found — just show the PDF, like Avenza
         // does with an unreferenced map. Placing it on the map is optional,
         // triggered by the "Tempatkan di Peta" button inside the viewer.
-        showPdfOnly(res.result.canvas, res.filename, res);
+        showPdfOnly(res.result.canvas, res.filename);
       }
     } else if (['geojson', 'json', 'kml', 'gpx'].includes(ext)) {
       const text = await file.text();
